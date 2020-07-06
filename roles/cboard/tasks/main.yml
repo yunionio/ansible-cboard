@@ -1,0 +1,101 @@
+---
+# This role contains common plays that will run on all nodes
+- name: Install yum utils
+  yum: name={{ item }} state=latest
+  with_items:
+  - yum-utils
+  - bash-completion
+  - epel-release
+
+- name: Add yunion rpm repository
+  get_url:
+    url: https://iso.yunion.cn/yumrepo-3.1/yunion.repo
+    dest: /etc/yum.repos.d/yunion.repo
+  become: yes
+
+- name: Turn off selinux
+  selinux:
+    state: disabled
+
+- name: Gather service facts
+  service_facts:
+
+- name: Disable systemd services
+  service:
+    name: "{{ item }}"
+    enabled: no
+    state: stopped
+  when: "item + '.service' in ansible_facts.services"
+  loop:
+  - firewalld
+
+- name: Change sysctl setting
+  sysctl:
+    name: "{{ item }}"
+    value: "1"
+    state: present
+  loop:
+  - net.bridge.bridge-nf-call-iptables
+  - net.bridge.bridge-nf-call-ip6tables
+  - net.ipv4.ip_forward
+
+- name: Change sysctl fs.inotify.max_user_watches
+  sysctl:
+    name: "fs.inotify.max_user_watches"
+    value: "65536"
+    state: present
+
+- name: Change sysctl fs.inotify.max_user_instances
+  sysctl:
+    name: "fs.inotify.max_user_instances"
+    value: "8192"
+    state: present
+
+#  https://github.com/kubernetes-retired/contrib/blob/master/ansible/roles/node/tasks/swapoff.yml
+- name: Turn off swap mount
+  mount:
+    name: swap
+    fstype: swap
+    state: absent
+- name: Turn off swap now
+  command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+
+# docker
+- block:
+  - name: Install docker
+    yum: name={{ item }} state=present
+    with_items:
+    - docker-ce-19.03.9
+    - docker-ce-cli-19.03.9
+    - containerd.io
+
+  - name: Restart docker service
+    service: name=docker state=restarted daemon_reload=yes enabled=yes
+
+# pull cboard images
+- name: Pull cboard images
+  shell: docker pull registry.cn-beijing.aliyuncs.com/yunionio/cboard:0.4.1
+
+- name: Upload server.xml
+  template: src=server.xml.j2 dest=/root/server.xml
+
+- name: Upload startup.sh
+  copy:
+    owner: root
+    group: root
+    mode: "0755"
+    src: startup.sh
+    dest: /root/startup.sh
+
+# remove cboard container
+- name: Remove cboard container
+  shell: |
+    docker rm -f cboard
+  ignore_errors: yes
+  failed_when: false
+
+# start cboard container
+- name: Start cboard container
+  shell: |
+    docker run --restart=always --net=host -v /root/:/root -itd --name=cboard --privileged=true registry.cn-beijing.aliyuncs.com/yunionio/cboard:0.4.1 /root/startup.sh
