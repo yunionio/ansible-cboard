@@ -1,0 +1,5 @@
+galaxy_info:
+  role_name: cboard
+  description: Install CBoard service
+
+dependencies: []
