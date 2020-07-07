@@ -29,38 +29,6 @@
   loop:
   - firewalld
 
-- name: Change sysctl setting
-  sysctl:
-    name: "{{ item }}"
-    value: "1"
-    state: present
-  loop:
-  - net.bridge.bridge-nf-call-iptables
-  - net.bridge.bridge-nf-call-ip6tables
-  - net.ipv4.ip_forward
-
-- name: Change sysctl fs.inotify.max_user_watches
-  sysctl:
-    name: "fs.inotify.max_user_watches"
-    value: "65536"
-    state: present
-
-- name: Change sysctl fs.inotify.max_user_instances
-  sysctl:
-    name: "fs.inotify.max_user_instances"
-    value: "8192"
-    state: present
-
-#  https://github.com/kubernetes-retired/contrib/blob/master/ansible/roles/node/tasks/swapoff.yml
-- name: Turn off swap mount
-  mount:
-    name: swap
-    fstype: swap
-    state: absent
-- name: Turn off swap now
-  command: swapoff -a
-  when: ansible_swaptotal_mb > 0
-
 # docker
 - block:
   - name: Install docker
